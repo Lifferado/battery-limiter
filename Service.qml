@@ -122,17 +122,28 @@ Item {
   }
 
   // One line per day feeding the card's History section: date, health %,
-  // cycles, full, design, unit. The grep guard makes the append idempotent,
-  // so re-attempts on the same day are harmless. ~41 bytes/day — a year of
-  // history is ~15 KB.
+  // cycles, full, design, unit. ~41 bytes/day — a year of history is ~15 KB.
+  //
+  // Symlink-safe by construction: instead of ">>" (which follows a symlink
+  // planted at our predictable path and would redirect the append into
+  // another file), we build the next revision in a mktemp file — 0600, in
+  // the same dir, owned by us — and mv it over the target. rename() replaces
+  // a symlink at the destination rather than following it, so a planted
+  // link is neutralized, not written through. Existing content is only
+  // carried over when the current file is a real regular file (not a
+  // symlink), which also keeps the once-a-day idempotency.
   function logHealth() {
     if (root.healthPct <= 0 || appendProc.running) return
     var today = new Date().toISOString().slice(0, 10)
     if (root.lastLogDate === today) return
     root.lastLogDate = today
     appendProc.command = ["sh", "-c",
-      "mkdir -p \"${1%/*}\"; { [ -f \"$1\" ] && tail -n 1 \"$1\" | grep -q \"^$2\"; } || " +
-      "printf '%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$2\" \"$3\" \"$4\" \"$5\" \"$6\" \"$7\" >> \"$1\"",
+      "d=\"${1%/*}\"; mkdir -p \"$d\" 2>/dev/null || exit 0; " +
+      "{ [ -f \"$1\" ] && [ ! -L \"$1\" ] && tail -n 1 \"$1\" | grep -q \"^$2\"; } && exit 0; " +
+      "tmp=$(mktemp \"$d/.health-XXXXXX\") || exit 0; " +
+      "{ [ -f \"$1\" ] && [ ! -L \"$1\" ] && tail -n 400 \"$1\"; " +
+      "printf '%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n' \"$2\" \"$3\" \"$4\" \"$5\" \"$6\" \"$7\"; } > \"$tmp\" " +
+      "&& mv -f \"$tmp\" \"$1\" || rm -f \"$tmp\"",
       "sh", root.healthLog, today, root.healthPct.toFixed(1),
       String(root.cycleCount), String(root.full), String(root.fullDesign), root.capacityUnit]
     appendProc.running = true
@@ -188,7 +199,9 @@ Item {
 
   Process {
     id: historyProc
-    command: ["sh", "-c", "{ [ -f \"$1\" ] && tail -n 400 \"$1\" || true; } | head -c 32768", "sh", root.healthLog]
+    // No-follow read: a symlink planted at our path must not make us read
+    // and parse some other file. Only a real regular file is read.
+    command: ["sh", "-c", "{ [ -f \"$1\" ] && [ ! -L \"$1\" ] && tail -n 400 \"$1\" || true; } | head -c 32768", "sh", root.healthLog]
     stdout: StdioCollector {
       onStreamFinished: root.parseHistory(text)
     }

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.alexdont.battery-limiter",
   "name": "Battery Limiter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "alexdont",
   "license": "MIT",
   "description": "Cap your battery's charge level to extend its lifespan: set the kernel charge limit (60/80/100 or a custom value) from the bar, see battery health and cycle count. Every change is a single explicit polkit prompt — no daemons, no udev rules",
