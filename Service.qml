@@ -62,9 +62,12 @@ Item {
       "set -e; " +
       "if [ -f \"$2/charge_control_start_threshold\" ]; then " +
       "  s=$(($1 - 5)); [ \"$s\" -lt 0 ] && s=0; " +
+      // start <= end is enforced on every write: start goes first when
+      // lowering, and is written again after end when raising.
       "  if [ \"$1\" -lt 100 ]; then " +
       "    printf '%s\\n' \"$s\" > \"$2/charge_control_start_threshold\" 2>/dev/null || true; " +
       "    printf '%s\\n' \"$1\" > \"$2/charge_control_end_threshold\"; " +
+      "    printf '%s\\n' \"$s\" > \"$2/charge_control_start_threshold\" 2>/dev/null || true; " +
       "  else " +
       "    printf '%s\\n' \"$1\" > \"$2/charge_control_end_threshold\"; " +
       "    printf '%s\\n' \"95\" > \"$2/charge_control_start_threshold\" 2>/dev/null || true; " +
